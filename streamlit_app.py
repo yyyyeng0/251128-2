@@ -1,151 +1,153 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+import random
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+st.set_page_config(page_title="나눗셈 학습 (10문제)", page_icon="🍬", layout="centered")
+
+st.title("🍬 초등 4학년 나눗셈 학습")
+st.write("성취기준: **[4수01-06] 한 자리 수 나눗셈의 원리를 이해하고, 몫과 나머지를 안다**")
+
+
+# ------------------------------------
+# 🔧 난이도 설정
+# ------------------------------------
+st.sidebar.header("난이도 선택")
+
+difficulty = st.sidebar.radio(
+    "난이도를 선택하세요",
+    ["쉬움", "보통", "어려움"],
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
-
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
-
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
-
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
-
-    return gdp_df
-
-gdp_df = get_gdp_data()
-
-# -----------------------------------------------------------------------------
-# Draw the actual page
-
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
-
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
+if difficulty == "쉬움":
+    A_RANGE = (10, 30)
+elif difficulty == "보통":
+    A_RANGE = (20, 50)
+else:
+    A_RANGE = (40, 80)
 
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
+# ------------------------------------
+# 🔧 문제 세트 생성(난이도 변경 시 재생성)
+# ------------------------------------
+if "problems" not in st.session_state or st.session_state.get("difficulty") != difficulty:
+    st.session_state.difficulty = difficulty
+    st.session_state.problems = [
+        (random.randint(*A_RANGE), random.randint(2, 9))
+        for _ in range(10)
+    ]
+    st.session_state.current = 0
+    st.session_state.show_hint = False
+    st.session_state.checked = False
+    st.session_state.user_q = None
+    st.session_state.user_r = None
 
-st.header(f'GDP in {to_year}', divider='gray')
 
-''
+# 현재 문제
+idx = st.session_state.current
+a, b = st.session_state.problems[idx]
 
-cols = st.columns(4)
+st.subheader(f"📘 {idx + 1}번째 문제 (총 10문제)")
+st.markdown(f"### **{a} ÷ {b}**")
 
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
 
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+# ------------------------------------
+# 🍬 사탕 그림: 묶지 않고 단순 배열
+# ------------------------------------
+st.markdown("### 🍬 전체 사탕")
+st.write("아래 사탕을 보고 직접 **b개씩 묶어보며** 몫과 나머지를 생각해보세요!")
 
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+candies_per_row = 10
+rows = (a + candies_per_row - 1) // candies_per_row
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+for r in range(rows):
+    row_candies = min(candies_per_row, a - r * candies_per_row)
+    cols = st.columns(row_candies)
+    for c in cols:
+        c.markdown("<div style='font-size:26px; text-align:center;'>🍬</div>", unsafe_allow_html=True)
+
+
+# ------------------------------------
+# 🔍 힌트 버튼 → 묶음 표시 
+# ------------------------------------
+if st.button("🔍 힌트 보기"):
+    st.session_state.show_hint = True
+
+if st.session_state.show_hint:
+    st.markdown("### 🔍 힌트: b개씩 묶음 표시")
+    st.write("묶음은 초록색, 나머지는 빨간색으로 표시됩니다!")
+
+    groups = a // b
+    remainder = a % b
+
+    for g in range(groups):
+        cols = st.columns(b)
+        for c in cols:
+            c.markdown("<div style='font-size:26px; text-align:center; color:green;'>🍬</div>", unsafe_allow_html=True)
+        st.write(f"➡️ **{g+1}번째 묶음**")
+
+    if remainder > 0:
+        st.write("➡️ **나머지 사탕**")
+        cols = st.columns(remainder)
+        for c in cols:
+            c.markdown("<div style='font-size:26px; text-align:center; color:red;'>🍬</div>", unsafe_allow_html=True)
+        st.write(f"👉 남은 사탕: {remainder}개")
+
+
+# ------------------------------------
+# ✏ 정답 입력
+# ------------------------------------
+st.markdown("### ✏ 몫과 나머지를 입력하세요")
+
+col1, col2 = st.columns(2)
+
+user_q = col1.number_input("몫", min_value=0, step=1, value=st.session_state.user_q or 0)
+user_r = col2.number_input("나머지", min_value=0, step=1, value=st.session_state.user_r or 0)
+
+real_q = a // b
+real_r = a % b
+
+if st.button("정답 확인"):
+    st.session_state.user_q = user_q
+    st.session_state.user_r = user_r
+
+    if user_q == real_q and user_r == real_r:
+        st.success("🎉 정답입니다! 정말 잘했어요!")
+        st.session_state.checked = True
+    else:
+        st.error("😅 다시 생각해볼까요? 힌트를 참고해보세요!")
+
+
+# 정답 보기
+if st.session_state.checked:
+    st.info(f"✔ 정답: 몫 = **{real_q}**, 나머지 = **{real_r}**")
+
+
+# ------------------------------------
+# 다음 문제 버튼
+# ------------------------------------
+if st.session_state.checked and st.session_state.current < 9:
+    if st.button("👉 다음 문제"):
+        st.session_state.current += 1
+        st.session_state.checked = False
+        st.session_state.show_hint = False
+        st.session_state.user_q = None
+        st.session_state.user_r = None
+        st.rerun()   # 🔥 최신 Streamlit용 올바른 rerun
+
+
+# ------------------------------------
+# 10문제 완료
+# ------------------------------------
+if idx == 9 and st.session_state.checked:
+    st.success("🎉 모든 10문제를 완료했습니다! 최고예요!")
+
+    if st.button("🔄 같은 난이도로 다시 시작"):
+        st.session_state.problems = [
+            (random.randint(*A_RANGE), random.randint(2, 9))
+            for _ in range(10)
+        ]
+        st.session_state.current = 0
+        st.session_state.checked = False
+        st.session_state.show_hint = False
+        st.session_state.user_q = None
+        st.session_state.user_r = None
+        st.rerun()   # 🔥 최신 Streamlit용 rerun
